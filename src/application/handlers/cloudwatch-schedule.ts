@@ -3,6 +3,18 @@ import 'reflect-metadata'
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import { v4 as uuidv4 } from 'uuid'
 import AWS from 'aws-sdk'
+import db from '../infrastructure/database/postgres-connection'
+
+// @TODO need to work cronjob expressions
+const dateToCron = (date: Date) => {
+  const minutes = date.getMinutes()
+  const hours = date.getHours()
+  const days = date.getDate()
+  const months = date.getMonth() + 1
+  const dayOfWeek = date.getDay()
+
+  return `${minutes} ${hours} ${days} ${months} ${dayOfWeek}`
+}
 
 /**
  * cloudwatch schedule request handler
@@ -11,19 +23,38 @@ import AWS from 'aws-sdk'
 export const lambdaHandler = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
+  console.info('cloudwatch schedule request handler')
+  console.log(JSON.stringify(event.requestContext.authorizer))
+
   try {
     if (!event.body) throw new Error('Invalid request payload')
 
-    const scheduleParsedBody = JSON.parse(event.body) as {}
-    console.info('schedule request', { request: scheduleParsedBody })
+    const { schedule = '' } = (JSON.parse(event.body) || {}) as { schedule: string }
+    console.info('schedule request', { request: { schedule } })
 
     const cwevents = new AWS.CloudWatchEvents({ apiVersion: '2015-10-07' })
     const ruleName = uuidv4()
 
+    const dateText = '2022-04-20T01:30:00.123Z'
+    const date = new Date(dateText)
+    const cron = dateToCron(date)
+    console.log(cron) //30 5 9 5 2
+
+    // need change schedule to cronExpression or more meaninful name
+    const query = `INSERT INTO schedule (id,schedule) VALUES(:id,:schedule)`
+    const test = await db.query(query, {
+      id: uuidv4(),
+      schedule: `(${schedule})`,
+    })
+
+    console.log('----99----')
+    console.log(JSON.stringify(test))
+    console.log('====99====')
+
     // create a schedule/rule
     const putRuleParams = {
       Name: ruleName,
-      ScheduleExpression: 'rate(2 minutes)',
+      ScheduleExpression: `rate(${cron})`,
       State: 'ENABLED',
     }
 

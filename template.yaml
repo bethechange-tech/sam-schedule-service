@@ -20,7 +20,7 @@ Globals:
         PGPASSWORD: !ImportValue "default-db-password"
         PGDATABASE: !ImportValue "default-db-name"
         PGPORT: 5432 
-        SecretArn: !ImportValue "default-db-secret"
+        SECRET_ARN: !ImportValue "default-db-secret"
 
 Conditions:
   isSamLocal: !Equals [!Ref "AWS::StackName", ""]
@@ -55,6 +55,12 @@ Resources:
               - "lambda:AddPermission"
               - "lambda:InvokeFunction"
             Resource: "*"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !ImportValue "default-db-secret"
+        - Statement:
+          - Effect: Allow
+            Action: 'rds-data:ExecuteStatement'
+            Resource: !ImportValue "default-db-cluster-arn"
       Timeout: 100
       Description: set a schedule lambda.
       Environment:
