@@ -2,6 +2,7 @@ import 'dotenv/config'
 import 'reflect-metadata'
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import AWS from 'aws-sdk'
+import { NO_CONTENT } from '../../utils/HttpClient/http-status-codes'
 
 /**
  * cloud watch delete request handler
@@ -22,7 +23,7 @@ export const lambdaHandler = async (
       .promise()
 
     return {
-      statusCode: 200,
+      statusCode: NO_CONTENT,
       body: JSON.stringify(deleteRule),
     }
   } catch (err) {
