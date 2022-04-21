@@ -23,7 +23,7 @@ paths:
             statusCode: 201
 
   /delete-schedule/{scheduleName}:
-    post:
+    delete:
       summary: schedule
       description: delete schedule a reminder
       tags:
@@ -37,13 +37,30 @@ paths:
       security: 
         - DefaultAuthorizer: []
       x-amazon-apigateway-integration:
-        httpMethod: POST
+        httpMethod: DELETE
         type: aws_proxy
         uri:
           Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CloudwatchDeleteScheduleFunction.Arn}/invocations
         responses:
           default:
-            statusCode: 201
+            statusCode: 204
+
+  /delete-all-schedules:
+    post:
+      summary: schedule
+      description: delete schedule a reminder
+      tags:
+        - delete-all-schedules
+      security: 
+        - DefaultAuthorizer: []
+      x-amazon-apigateway-integration:
+        httpMethod: POST
+        type: aws_proxy
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CloudwatchDeleteAllScheduleFunction.Arn}/invocations
+        responses:
+          default:
+            statusCode: 204
 
 x-amazon-apigateway-request-validators:
   all:

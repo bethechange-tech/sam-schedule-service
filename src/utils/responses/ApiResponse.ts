@@ -2,7 +2,6 @@ import { APIGatewayProxyResult } from 'aws-lambda';
 import {
     BAD_REQUEST,
     INTERNAL_SERVER_ERROR,
-    // OK,
     CREATED,
     NOT_FOUND,
     NO_CONTENT,

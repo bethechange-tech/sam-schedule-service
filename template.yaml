@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   simple schedule serverless application setup
-  
 Globals:
   Api:
     MinimumCompressionSize: 0
@@ -14,13 +13,13 @@ Globals:
     Environment:
       Variables:
         ENV: Production
-        PGDBClusterArn: !ImportValue "default-db-cluster-arn"
+        PGDBCLUSTERARN: !ImportValue "default-db-cluster-arn"
         PGUSER: !ImportValue "default-db-admin-username"
         PGHOST: !ImportValue "default-db-cluster-endpoint"
         PGPASSWORD: !ImportValue "default-db-password"
         PGDATABASE: !ImportValue "default-db-name"
         PGPORT: 5432 
-        SecretArn: !ImportValue "default-db-secret"
+        SECRET_ARN: !ImportValue "default-db-secret"
 
 Conditions:
   isSamLocal: !Equals [!Ref "AWS::StackName", ""]
@@ -39,11 +38,14 @@ Resources:
             Location: ./docs/api.yaml
 
   CloudwatchSceduleFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: dist/
       Handler: cloudwatch-schedule.lambdaHandler
+      # FunctionName: String
+      Timeout: 100
       MemorySize: 128
+      Description: set a schedule lambda.
       Policies:
         - Statement:
             Effect: "Allow"
@@ -51,37 +53,58 @@ Resources:
               - "events:PutEvents"
               - "events:PutRule"
               - "events:PutTargets"
+              - "events:ListRules"
               - "iam:PassRole"
               - "lambda:AddPermission"
               - "lambda:InvokeFunction"
             Resource: "*"
-      Timeout: 100
-      Description: set a schedule lambda.
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !ImportValue "default-db-secret"
+        - Statement:
+          - Effect: Allow
+            Action: 'rds-data:ExecuteStatement'
+            Resource: !ImportValue "default-db-cluster-arn"
       Environment:
         Variables:
-          TargetFunctionArn: !GetAtt CloudwatchTargetFunction.Arn
-          TargetFunctionName: !Ref CloudwatchTargetFunction
+          TARGET_FUNCTION_ARN: !GetAtt CloudwatchTargetFunction.Arn
+          TARGET_FUNCTION_NAME: !Ref CloudwatchTargetFunction
 
   CloudwatchDeleteScheduleFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: dist/
       Handler: cloudwatch-delete-schedule.lambdaHandler
+      Timeout: 100
       MemorySize: 128
+      Description: delete a schedule lambda.
       Policies:
         - Statement:
             Effect: "Allow"
             Action: 
               - "events:*"
             Resource: "*"
+
+  CloudwatchDeleteAllScheduleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist/
+      Handler: cloudwatch-delete-all-schedules.lambdaHandler
       Timeout: 100
+      MemorySize: 128
       Description: delete a schedule lambda.
+      Policies:
+        - Statement:
+            Effect: "Allow"
+            Action: 
+              - "events:*"
+            Resource: "*"
 
   CloudwatchTargetFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: dist/
       Handler: cloudwatch-target-function.lambdaHandler
+      FunctionName: target2
       MemorySize: 128
       Timeout: 100
       Description: cloudwatch/eventbridge target function.
@@ -120,6 +143,15 @@ Resources:
       Principal: apigateway.amazonaws.com
       FunctionName: !Ref CloudwatchDeleteScheduleFunction
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ScheduleServiceApiGateway}/*'
+
+  CloudwatchDeleteAllScheduleFunctionResourcePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      Principal: apigateway.amazonaws.com
+      FunctionName: !Ref CloudwatchDeleteAllScheduleFunction
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ScheduleServiceApiGateway}/*'
+
 
 Outputs:
   API:

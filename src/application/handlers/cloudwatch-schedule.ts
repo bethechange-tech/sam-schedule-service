@@ -2,7 +2,14 @@ import 'dotenv/config'
 import 'reflect-metadata'
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import { v4 as uuidv4 } from 'uuid'
+import db from '../infrastructure/database/postgres-connection'
 import AWS from 'aws-sdk'
+import {
+  cloudWatchSchedule,
+  CloudWatchScheduleArgs,
+} from '../services/cloudwatch-schedule'
+
+import { OK } from '../../utils/HttpClient/http-status-codes'
 
 /**
  * cloudwatch schedule request handler
@@ -11,55 +18,48 @@ import AWS from 'aws-sdk'
 export const lambdaHandler = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
+  console.info('cloudwatch schedule request handler')
+  console.log(JSON.stringify(event.requestContext.authorizer))
+
   try {
     if (!event.body) throw new Error('Invalid request payload')
+    const parsedBody = (JSON.parse(event.body) || {}) as CloudWatchScheduleArgs
 
-    const scheduleParsedBody = JSON.parse(event.body) as {}
-    console.info('schedule request', { request: scheduleParsedBody })
+    console.info('schedule request', { request: parsedBody })
 
-    const cwevents = new AWS.CloudWatchEvents({ apiVersion: '2015-10-07' })
-    const ruleName = uuidv4()
+    const { SourceArn, cronExpression, ruleName } = await cloudWatchSchedule(
+      parsedBody
+    )
 
-    // create a schedule/rule
-    const putRuleParams = {
-      Name: ruleName,
-      ScheduleExpression: 'rate(2 minutes)',
-      State: 'ENABLED',
-    }
-
-    const putRule = await cwevents.putRule(putRuleParams).promise()
-
-    // target the lambdas you want to trigger
-    const putTargetParams = {
-      Rule: ruleName,
-      Targets: [
-        {
-          Arn: process.env?.TargetFunctionArn as string,
-          Id: uuidv4(),
-          Input: '{ "key1": "STRING_VALUE", "key2": "STRING_VALUE" }',
-        },
-      ],
-    }
-
-    await cwevents.putTargets(putTargetParams).promise()
+    // need change schedule to cronExpression or more meaninful name
+    const query = `INSERT INTO schedule_app (id,cron_expression,rule_name) VALUES(:id,:cron_expression,:rule_name)`
+    await db.query<{
+      id: string
+      ['cron_expression']: string
+      ['rule_name']: string
+    }>(query, {
+      id: uuidv4(),
+      cron_expression: cronExpression,
+      rule_name: ruleName,
+    })
 
     // set lambda permissions related to to schedule created
     const lambda = new AWS.Lambda({ apiVersion: '2015-03-31' })
     const lambdaPermissionParams = {
-      FunctionName: process.env?.TargetFunctionName as string /* required */,
+      FunctionName: String(process.env?.TARGET_FUNCTION_NAME) /* required */,
       StatementId: ruleName /* required */,
       Principal: 'events.amazonaws.com' /* required */,
       Action: 'lambda:InvokeFunction' /* required */,
-      SourceArn: putRule.RuleArn,
+      SourceArn,
     }
 
     await lambda.addPermission(lambdaPermissionParams).promise()
     return {
-      statusCode: 200,
-      body: JSON.stringify({}),
+      statusCode: OK,
+      body: JSON.stringify({ cronExpression }),
     }
   } catch (err) {
-    console.error(err)
+    console.error(err);
     return {
       statusCode: 400,
       body: JSON.stringify({}),
